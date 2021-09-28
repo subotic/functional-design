@@ -105,18 +105,18 @@ object input_stream {
    * or will read from the concatenation of all `secondaries`,
    * and will buffer everything.
    */
-  lazy val solution: IStream =
+  lazy val allData: IStream =
     primary.orElse(secondary).buffered
 
   
   lazy val primary: IStream           = ???
   
-  // IStream.empty ++ secondaries(0) ++ secondaries(1) ++ ... ++ secondaries(n-1)
-  lazy val secondary: IStream = secondaries.foldLeft(IStream.empty){
+  // IStream.empty ++ fragments(0) ++ fragments(1) ++ ... ++ fragments(n-1)
+  lazy val secondary: IStream = fragments.foldLeft(IStream.empty){
     case (acc, cur) => acc ++ cur
   }
 
-  lazy val secondaries: List[IStream] = ???
+  lazy val fragments: List[IStream] = ???
 }
 
 /**
