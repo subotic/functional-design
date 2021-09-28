@@ -43,7 +43,22 @@ object input_stream {
      * exhausted, it will close the first input stream, make the second
      * input stream, and continue reading from the second one.
      */
-    def ++(that: => IStream): IStream = ???
+    def ++(that: => IStream): IStream =
+      IStream { () =>
+        var is = self.createInputStream()
+        var second = false
+
+        new InputStream {
+          def read(): Int            = 
+            val byte = is.read()
+
+            if (byte == -1 && !second) {
+              is = that.createInputStream()
+              read()
+            } else byte
+          override def close(): Unit = is.close()
+        }
+      }
 
     /**
      * EXERCISE 2
@@ -52,7 +67,10 @@ object input_stream {
      * try to create the first input stream, but if that fails by throwing
      * an exception, it will then try to create the second input stream.
      */
-    def orElse(that: => IStream): IStream = ???
+    def orElse(that: => IStream): IStream = 
+      IStream { () =>
+        Try(self.createInputStream()).getOrElse(that.createInputStream)
+      }
 
     /**
      * EXERCISE 3
@@ -61,7 +79,10 @@ object input_stream {
      * create the input stream, but wrap it in Java's `BufferedInputStream`
      * before returning it.
      */
-    def buffered: IStream = ???
+    def buffered: IStream =
+      IStream { () =>
+          new BufferedInputStream(self.createInputStream())
+      }
   }
   object IStream {
 
@@ -84,9 +105,17 @@ object input_stream {
    * or will read from the concatenation of all `secondaries`,
    * and will buffer everything.
    */
-  lazy val solution: IStream = ???
+  lazy val solution: IStream =
+    primary.orElse(secondary).buffered
 
+  
   lazy val primary: IStream           = ???
+  
+  // IStream.empty ++ secondaries(0) ++ secondaries(1) ++ ... ++ secondaries(n-1)
+  lazy val secondary: IStream = secondaries.foldLeft(IStream.empty){
+    case (acc, cur) => acc ++ cur
+  }
+
   lazy val secondaries: List[IStream] = ???
 }
 

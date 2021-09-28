@@ -1,6 +1,61 @@
 package net.degoes
 
 import java.time.Instant
+import java.util.Date
+
+/*
+
+Algebraic Data Types (ADTs)
+
+Any data type compose from:
+
+  - Case classes (Products)
+  - Sealed traits (Sums)
+  - Primitives (Int, String, ...)
+
+  Algebra of types (Products and Sums)
+ */
+
+// Best practice for code organization:
+// put all constructor in the companion object to enhance discoverability!
+
+// Product Type: A * B * C * D
+//  Constructor: (A, B, C, D) => A * B * C * D
+//  Projectors:
+//    1. A * B * C * D => A
+//    2. A * B * C * D => B
+//    3. A * B * C * D => C
+//    4. A * B * C * D => D
+final case class User(email: String, hashedPassphrase: String, salt: Long, name: String)
+object User {
+  def fromJSON(jsonString: String): User = ???
+
+  def user = User("sherlock", "fefefe", 123L, "Sherlock Holmes")
+
+  user.email
+  user.name
+  user.salt
+  user.hashedPassphrase
+
+  user.copy(name = "Sherlock Holmes II")
+
+  // User.apply
+  // Filds
+  // equals, hashCode
+  // User.unapply
+
+  user match {
+    case User(email, _, _, _) => println(email)
+  }
+}
+
+// Sum Type: A + B + C + D
+sealed trait Ticket
+object Ticket {
+  // best practice is to put constructors for constructor in the companion object!
+  final case class Online(url: String)      extends Ticket
+  final case class Offline(address: String) extends Ticket
+}
 
 /*
  * INTRODUCTION
@@ -30,7 +85,7 @@ object credit_card {
    *  * Expiration date
    *  * Security code
    */
-  type CreditCard
+  final case class CreditCard(number: Int, name: String, exp: Date, securityCode: Int)
 
   /**
    * EXERCISE 2
@@ -40,7 +95,15 @@ object credit_card {
    * or a digital product, such as a book or movie, or access to an event, such
    * as a music concert or film showing.
    */
-  type Product
+  sealed trait Product
+  object Product {
+    final case class Physical(name: String, price: Currency)            extends Product
+    final case class Digital(name: String, price: Currency)             extends Product
+    final case class Event(name: String, venue: Place, price: Currency) extends Product
+  }
+
+  final case class Currency()
+  final case class Place()
 
   /**
    * EXERCISE 3
@@ -49,7 +112,11 @@ object credit_card {
    * of a product price, which could be one-time purchase fee, or a recurring
    * fee on some regular interval.
    */
-  type PricingScheme
+  sealed trait PricingScheme
+  object PricingScheme {
+    final case class OneTime(price: Int)                                 extends PricingScheme
+    final case class Recurring(price: Int, setupFee: Int, interval: Int) extends PricingScheme
+  }
 }
 
 /**
@@ -66,34 +133,30 @@ object events {
    * Refactor the object-oriented data model in this section to a more
    * functional one, which uses only sealed traits and case classes.
    */
-  abstract class Event(val id: Int) {
-
-    def time: Instant
-  }
+  final case class Event(id: Int, time: Instant, payload: Payload)
 
   // Events are either UserEvent (produced by a user) or DeviceEvent (produced by a device),
   // please don't extend both it will break code!!!
-  trait UserEvent extends Event {
-    def userName: String
+
+  sealed trait Payload
+  object Payload {
+    final case class User(userName: String, userDetails: UserEventDetails)    extends Payload
+    final case class Device(deviceId: Int, deviceDetails: DeviceEventDetails) extends Payload
+
   }
 
-  // Events are either UserEvent (produced by a user) or DeviceEvent (produced by a device),
-  // please don't extend both it will break code!!!
-  trait DeviceEvent extends Event {
-    def deviceId: Int
+  sealed trait UserEventDetails
+  object UserEventDetails {
+    final case class Purchase(item: String, price: Double) extends UserEventDetails
+    case object UserAccountCreated                         extends UserEventDetails
+
   }
 
-  class SensorUpdated(id: Int, val deviceId: Int, val time: Instant, val reading: Option[Double])
-      extends Event(id)
-      with DeviceEvent
-
-  class DeviceActivated(id: Int, val deviceId: Int, val time: Instant) extends Event(id) with DeviceEvent
-
-  class UserPurchase(id: Int, val item: String, val price: Double, val time: Instant, val userName: String)
-      extends Event(id)
-      with UserEvent
-
-  class UserAccountCreated(id: Int, val userName: String, val time: Instant) extends Event(id) with UserEvent
+  sealed trait DeviceEventDetails
+  object DeviceEventDetails {
+    final case class SensorUpdated(reading: Option[Double]) extends DeviceEventDetails
+    case object DeviceActivated                             extends DeviceEventDetails
+  }
 
 }
 
@@ -147,7 +210,7 @@ object bank {
    *
    * Using only sealed traits and case classes, develop a model of a customer at a bank.
    */
-  type Customer
+  final case class Customer(name: String, accounts: Set[Account])
 
   /**
    * EXERCISE 2
@@ -157,7 +220,13 @@ object bank {
    * against a given currency. Another account type allows the user to earn
    * interest at a given rate for the holdings in a given currency.
    */
-  type AccountType
+  sealed trait AccountType
+  object AccountType {
+    case object Checking                                extends AccountType
+    final case class Saving(interestRate: InterestRate) extends AccountType
+  }
+
+  type InterestRate
 
   /**
    * EXERCISE 3
@@ -166,7 +235,15 @@ object bank {
    * account, including details on the type of bank account, holdings, customer
    * who owns the bank account, and customers who have access to the bank account.
    */
-  type Account
+  final case class Account(
+    accountType: AccountType,
+    owner: Customer,
+    holdings: Map[Currency, BigDecimal],
+    sharedWith: Map[Customer, Permissions]
+  )
+
+  sealed trait Currency
+  final case class Permissions(read: Boolean, share: Boolean)
 }
 
 /**
