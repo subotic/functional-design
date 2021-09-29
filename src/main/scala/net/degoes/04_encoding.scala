@@ -1,5 +1,160 @@
 package net.degoes
 
+// Solution != Model of Solution
+
+// FP = Total, Deterministic, Pure
+// f(x)
+//  - f is total (defined for all inputs)
+//  - f is deterministic (when x == y, f(x) == f(y))
+//  - f is pure (for computing the value of f(x) is the only effect of function application)
+
+final case class Email()
+
+/*
+A Gmail-style EmailFilter:
+  - test if an email matches the filter
+  - persistence
+ */
+final case class EmailFilter1(accept: Email => Boolean, persist: () => String) // can store additional functions which would correspond to additional methods in the trait bellow
+
+// why prefer final case class instead of trait:
+// functions are values that have methods on them, e.g., andThen etc.
+// methods inside traits are not values
+// executable encoding!!!
+// the accept function executes the filter
+
+trait EmailFilter2 {
+  def accept(email: Email): Boolean
+  def persist(): String
+}
+
+final case class IStream1(createInputStream: () => java.io.InputStream)
+
+trait IStream2 {
+  def createInputStream(): java.io.InputStream
+}
+
+// ee - executable encoding
+// de - declarative encoding
+object ee_versus_de {
+  import scala.collection.mutable.Queue
+
+  type ProgramExecutor[+A] = Queue[Any] => A
+
+  object ee {
+    final case class Program[+A](run: ProgramExecutor[A]) { self =>
+      def map[B](f: A => B): Program[B] = self.flatMap(a => Program(f(a)))
+
+      // OPERATION 1
+      def flatMap[B](f: A => Program[B]): Program[B] =
+        Program(stack => f(self.run(stack)).run(stack))
+
+      def push: Program[Unit] =
+        for {
+          a <- self
+          _ <- Program.push(a)
+        } yield ()
+    }
+    object Program {
+      def apply[A](a: => A): Program[A] = unit.map(_ => a)
+
+      // CONSTRUCTOR 1
+      val unit: Program[Unit] = Program(_ => ())
+
+      // CONSTRUCTOR 2
+      def push[A](a: A): Program[Unit] =
+        Program(stack => stack.enqueue(a))
+
+      // CONSTRUCTOR 3
+      def pop: Program[Any] = Program((stack: Queue[Any]) => stack.dequeue())
+
+      def popInt: Program[Int] = pop.map(_.asInstanceOf[Int])
+
+      def add: Program[Int] =
+        for {
+          v1 <- popInt
+          v2 <- popInt
+        } yield v1 + v2
+    }
+
+    val program =
+      for {
+        _ <- Program.push(1)
+        _ <- Program.push(1)
+        _ <- Program.add.push
+        v <- Program.popInt
+      } yield v
+
+    program.run(Queue())
+  }
+
+  object de {
+    sealed trait Program[+A] { self =>
+      def map[B](f: A => B): Program[B] = self.flatMap(a => Program(f(a)))
+
+      def flatMap[B](f: A => Program[B]): Program[B] =
+        Program.FlatMap(self, f)
+
+      def push: Program[Unit] =
+        for {
+          a <- self
+          _ <- Program.push(a)
+        } yield ()
+
+      def run(stack: Queue[Any]): A = Program.compile(self)(stack)
+    }
+    object Program {
+      private case object Unit                                                        extends Program[scala.Unit]
+      private case object Pop                                                         extends Program[Any]
+      private final case class Push[A](value: A)                                      extends Program[scala.Unit]
+      private final case class FlatMap[A, B](program: Program[A], f: A => Program[B]) extends Program[B]
+
+      def apply[A](a: => A): Program[A] = unit.map(_ => a)
+
+      val unit: Program[Unit] = Unit
+
+      def push[A](a: A): Program[Unit] = Push(a)
+
+      def pop: Program[Any] = Pop
+
+      def popInt: Program[Int] = pop.map(_.asInstanceOf[Int])
+
+      def add: Program[Int] =
+        for {
+          v1 <- popInt
+          v2 <- popInt
+        } yield v1 + v2
+
+      private def compile[A](self: Program[A]): ProgramExecutor[A] = { (stack: Queue[Any]) =>
+        self match {
+          case Program.Unit => ()
+
+          case Push(value) =>
+            stack.enqueue(value)
+
+            ()
+          case Pop => stack.dequeue()
+
+          case FlatMap(program, f) =>
+            val a = compile(program)(stack)
+
+            compile(f(a))(stack)
+        }
+      }
+    }
+
+    val program =
+      for {
+        _ <- Program.push(1)
+        _ <- Program.push(1)
+        _ <- Program.add.push
+        v <- Program.popInt
+      } yield v
+
+    program.run(Queue())
+  }
+}
+
 /*
  * INTRODUCTION
  *
@@ -69,7 +224,7 @@ object education_executable {
      * Add an operator `+` that appends this quiz to the specified quiz. Model
      * this as pure data using a constructor for Quiz in the companion object.
      */
-    def +(that: Quiz2): Quiz2 = ???
+    def +(that: Quiz2): Quiz2 = Quiz2.Then(self, that)
 
     /**
      * EXERCISE 2
@@ -77,10 +232,14 @@ object education_executable {
      * Add a unary operator `bonus` that marks this quiz as a bonus quiz. Model
      * this as pure data using a constructor for Quiz in the companion object.
      */
-    def bonus: Quiz2 = ???
+    def bonus: Quiz2 = Quiz2.Bonus(self)
   }
   object Quiz2 {
-    def apply[A](question: Question[A]): Quiz2 = ???
+    final case class Then(first: Quiz2, second: Quiz2) extends Quiz2
+    final case class Bonus(quiz: Quiz2)                extends Quiz2
+    final case class Single(question: Question[_])     extends Quiz2
+
+    def apply[A](question: Question[A]): Quiz2 = Single(question)
   }
 
   /**
@@ -90,7 +249,15 @@ object education_executable {
    * the interactive console operations that it describes, returning a
    * QuizResult value.
    */
-  def run(quiz: Quiz2): QuizResult = ???
+  def run(quiz: Quiz2): QuizResult = {
+    def compile(quiz: Quiz2): Quiz =
+      quiz match {
+        case Quiz2.Then(l, r) => compile(l) + compile(r)
+        case Quiz2.Bonus(q) => compile(q).bonus
+        case Quiz2.Single()
+      }
+  }
+
 }
 
 /**
@@ -101,7 +268,7 @@ object education_executable {
 object contact_processing2 {
   import contact_processing._
 
-  sealed trait SchemaMapping2 {
+  sealed trait SchemaMapping2 { self =>
 
     /**
      * EXERCISE 1
@@ -109,7 +276,7 @@ object contact_processing2 {
      * Add a `+` operator that models combining two schema mappings into one,
      * applying the effects of both in sequential order.
      */
-    def +(that: SchemaMapping2): SchemaMapping2 = ???
+    def +(that: SchemaMapping2): SchemaMapping2 = SchemaMapping2.Then(self, that)
 
     /**
      * EXERCISE 2
@@ -118,16 +285,19 @@ object contact_processing2 {
      * one, applying the effects of the first one, unless it fails, and in that
      * case, applying the effects of the second one.
      */
-    def orElse(that: SchemaMapping2): SchemaMapping2 = ???
+    def orElse(that: SchemaMapping2): SchemaMapping2 = SchemaMapping2.OrElse(self, that)
   }
   object SchemaMapping2 {
-
+    final case class Then(first: SchemaMapping2, second: SchemaMapping2) extends SchemaMapping2
+    final case class OrElse(first: SchemaMapping2, second: SchemaMapping2) extends SchemaMapping2
+    final case class Rename(oldName: String, newName: String) extends SchemaMapping2
+    final case class Delete(name: String) extends SchemaMapping2
     /**
      * EXERCISE 3
      *
      * Add a constructor for `SchemaMapping` models renaming the column name.
      */
-    def rename(oldName: String, newName: String): SchemaMapping2 = ???
+    def rename(oldName: String, newName: String): SchemaMapping2 = Rename(oldName, newName)
 
     /**
      * EXERCISE 4
@@ -135,7 +305,7 @@ object contact_processing2 {
      * Add a constructor for `SchemaMapping` that models deleting the column
      * of the specified name.
      */
-    def delete(name: String): SchemaMapping2 = ???
+    def delete(name: String): SchemaMapping2 = Delete(name)
   }
 
   /**
@@ -174,7 +344,7 @@ object email_filter2 {
      * Add an "and" operator that models matching an email if both the first and
      * the second email filter match the email.
      */
-    def &&(that: EmailFilter): EmailFilter = ???
+    def &&(that: EmailFilter): EmailFilter = EmailFilter.And(self, that)
 
     /**
      * EXERCISE 2
@@ -182,7 +352,7 @@ object email_filter2 {
      * Add an "or" operator that models matching an email if either the first or
      * the second email filter match the email.
      */
-    def ||(that: EmailFilter): EmailFilter = ???
+    def ||(that: EmailFilter): EmailFilter = EmailFilter.Or(self, that)
 
     /**
      * EXERCISE 3
@@ -190,9 +360,17 @@ object email_filter2 {
      * Add a "negate" operator that models matching an email if this email filter
      * does NOT match an email.
      */
-    def negate: EmailFilter = ???
+    def negate: EmailFilter = EmailFilter.Negate(self)
   }
   object EmailFilter {
+    final case class And(l: EmailFilter, r: EmailFilter) extends EmailFilter
+    final case class Or(l: EmailFilter, r: EmailFilter) extends EmailFilter
+    final case class Negate(emailFilter: EmailFilter) extends EmailFilter
+    final case class SubjectContains(string: String) extends EmailFilter
+    final case class BodyContains(string: String) extends EmailFilter
+    final case class SenderIn(senders: Set[Address]) extends EmailFilter
+    final case class RecipientIn(recipients: Set[Address]) extends EmailFilter
+
 
     /**
      * EXERCISE 4
@@ -200,7 +378,7 @@ object email_filter2 {
      * Add a constructor for `EmailFilter` that models looking to see if the
      * subject of an email contains the specified word.
      */
-    def subjectContains(string: String): EmailFilter = ???
+    def subjectContains(string: String): EmailFilter = SubjectContains(string)
 
     /**
      * EXERCISE 5
@@ -208,7 +386,7 @@ object email_filter2 {
      * Add a constructor for `EmailFilter` that models looking to see if the
      * body of an email contains the specified word.
      */
-    def bodyContains(string: String): EmailFilter = ???
+    def bodyContains(string: String): EmailFilter = BodyContains(string)
 
     /**
      * EXERCISE 6
@@ -216,7 +394,7 @@ object email_filter2 {
      * Add a constructor for `EmailFilter` that models looking to see if the
      * sender of an email is in the specified set of senders.
      */
-    def senderIn(senders: Set[Address]): EmailFilter = ???
+    def senderIn(senders: Set[Address]): EmailFilter = SenderIn(senders)
 
     /**
      * EXERCISE 7
@@ -224,7 +402,7 @@ object email_filter2 {
      * Add a constructor for `EmailFilter` that models looking to see if the
      * recipient of an email is in the specified set of recipients.
      */
-    def recipientIn(recipients: Set[Address]): EmailFilter = ???
+    def recipientIn(recipients: Set[Address]): EmailFilter = RecipientIn(recipients)
   }
 
   /**

@@ -415,10 +415,9 @@ object pricing_fetcher {
    * EXERCISE 1
    *
    * `Schedule` is a data type that models a schedule, which has the ability to
-   * indicate whether at any given `java.time.Instant`, it is time to fetch the
-   * pricing data set.
+   * indicate whether at any given `Time`, it is time to fetch the pricing data set.
    */
-  final case class Schedule( /* ??? */ ) { self =>
+  final case class Schedule(isFetchTime: Time => Boolean) { self =>
     /*
      * EXERCISE 2
      *
@@ -426,7 +425,8 @@ object pricing_fetcher {
      * yield the union of those schedules. That is, the fetch will occur
      * only when either of the schedules would have performed a fetch.
      */
-    def union(that: Schedule): Schedule = ???
+    def union(that: Schedule): Schedule =
+      Schedule(now => self.isFetchTime(now) || that.isFetchTime(now))
 
     /**
      * EXERCISE 3
@@ -435,7 +435,8 @@ object pricing_fetcher {
      * yield the intersection of those schedules. That is, the fetch will occur
      * only when both of the schedules would have performed a fetch.
      */
-    def intersection(that: Schedule): Schedule = ???
+    def intersection(that: Schedule): Schedule =
+      Schedule(now => self.isFetchTime(now) && that.isFetchTime(now))
 
     /**
      * EXERCISE 4
@@ -444,7 +445,7 @@ object pricing_fetcher {
      * when the original schedule would fetch, and will always fetch when the
      * original schedule would not fetch.
      */
-    def negate: Schedule = ???
+    def negate: Schedule = Schedule(now => !self.isFetchTime(now))
   }
   object Schedule {
 
@@ -454,7 +455,8 @@ object pricing_fetcher {
      * Create a constructor for Schedule that models fetching on specific weeks
      * of the month.
      */
-    def weeks(weeks: Int*): Schedule = ???
+    def weeks(weeks: Int*): Schedule =
+      Schedule(now => weeks.contains(now.weekOfMonth))
 
     /**
      * EXERCISE 6
@@ -462,7 +464,8 @@ object pricing_fetcher {
      * Create a constructor for Schedule that models fetching on specific days
      * of the week.
      */
-    def daysOfTheWeek(daysOfTheWeek: DayOfWeek*): Schedule = ???
+    def daysOfTheWeek(daysOfTheWeek: DayOfWeek*): Schedule =
+      Schedule(now => daysOfTheWeek.contains(now.dayOfWeek))
 
     /**
      * EXERCISE 7
@@ -470,7 +473,8 @@ object pricing_fetcher {
      * Create a constructor for Schedule that models fetching on specific
      * hours of the day.
      */
-    def hoursOfTheDay(hours: Int*): Schedule = ???
+    def hoursOfTheDay(hours: Int*): Schedule =
+      Schedule(now => hours.contains(now.hourOfDay))
 
     /**
      * EXERCISE 8
@@ -478,14 +482,24 @@ object pricing_fetcher {
      * Create a constructor for Schedule that models fetching on specific minutes
      * of the hour.
      */
-    def minutesOfTheHour(minutes: Int*): Schedule = ???
+    def minutesOfTheHour(minutes: Int*): Schedule =
+      Schedule(now => minutes.contains(now.minuteOfHour))
   }
 
   /**
    * EXERCISE 9
    *
-   * Create a schedule that repeats every Wednesday, at 6:00 AM and 12:00 PM,
+   * Create a schedule that repeats every Wednesday, at 6:00 AM and 12:00 noon,
    * and at 5:30, 6:30, and 7:30 every Thursday.
    */
-  lazy val schedule: Schedule = ???
+  lazy val schedule: Schedule = wednesdays.union(thursdays)
+
+  lazy val sixAndNoon: Schedule = Schedule.hoursOfTheDay(6, 12)
+  lazy val wednesdays: Schedule = Schedule.daysOfTheWeek(DayOfWeek.Wednesday).intersection(sixAndNoon)
+
+  lazy val fiveThirty             = Schedule.hoursOfTheDay(5) intersection Schedule.minutesOfTheHour(30)
+  lazy val sixThirty              = Schedule.hoursOfTheDay(6) intersection Schedule.minutesOfTheHour(30)
+  lazy val sevenThirty            = Schedule.hoursOfTheDay(7) intersection Schedule.minutesOfTheHour(30)
+  lazy val fiveOrSixOrSevenThirty = fiveThirty.union(sixThirty).union(sevenThirty)
+  lazy val thursdays: Schedule    = Schedule.daysOfTheWeek(DayOfWeek.Thursday).intersection(fiveOrSixOrSevenThirty)
 }
