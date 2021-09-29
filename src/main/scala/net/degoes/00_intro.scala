@@ -77,7 +77,17 @@ object tour {
     def flakyRequest(url: String): Task[Response] = ???
 
     lazy val example = flakyRequest("https://google.com").retry(schedule)
+
+    // (OtherThings) => A - constructor
+    // (A, OtherThings) => A - unary operator
+    // (A, B, OtherThings) => - binary operator
+    //
+    // List#map
+    // trait List[A] { def map[B](f: A => B): List[B]}
+    // Parameterized Unary Operator
   }
+
+
 
   object optics {
     final case class User(name: String, address: Address)
