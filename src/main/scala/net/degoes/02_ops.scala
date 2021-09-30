@@ -1,5 +1,7 @@
 package net.degoes
 
+import implicitbox.Priority
+
 /*
  * INTRODUCTION
  *
@@ -462,6 +464,29 @@ object ui_events {
     def addListener(listener: Listener): Unit
   }
 
+
+  object declarative {
+    // Every listener comes from:
+    //  a. A constructor
+    //  b. A transformation of an existing listener
+    //  c. A composition of exisitn listeners
+    sealed trait Listener { self =>
+      import Listener._
+      def +(that: Listener): Listener = Both(self, that)
+      def orElse(that: Listener): Listener = Fallback(self, that)
+      def runOn(ec: scala.concurrent.ExecutionContext): Listener = RunOn(self, ec)
+      def debug: Listener = Debug(self)
+    }
+    object Listener {
+      final case class Both(self: Listener, that: Listener) extends Listener
+      final case class Fallback(self: Listener, that: Listener) extends Listener
+      final case class RunOn(self: Listener, ec: scala.concurrent.ExecutionContext) extends Listener
+      final case class Debug(self: Listener) extends Listener
+    }
+  }
+
+
+
   final case class Listener(onEvent: GameEvent => Unit) { self =>
 
     /**
@@ -574,8 +599,6 @@ object education {
   object QuizResult {
 
     /**
-     * EXERCISE 2
-     *
      * Add an `empty` QuizResult that, when combined with any quiz result,
      * returns that same quiz result.
      */
@@ -585,7 +608,7 @@ object education {
   final case class Quiz(run: () => QuizResult) { self =>
 
     /**
-     * EXERCISE 3
+     * EXERCISE 2
      *
      * Add an operator `+` that appends this quiz to the specified quiz.
      */
@@ -595,14 +618,14 @@ object education {
       }
 
     /**
-     * EXERCISE 4
+     * EXERCISE 3
      *
      * Add a unary operator `bonus` that marks this quiz as a bonus quiz.
      */
     def bonus: Quiz = Quiz(() => self.run().toBonus)
 
     /**
-     * EXERCISE 5
+     * EXERCISE 4
      *
      * Add a conditional operator that calls the specified function on the result of running the
      * quiz, and if it returns true, will execute the `ifPass` quiz afterward; but otherwise, will
@@ -673,7 +696,7 @@ object education {
   }
 
   /**
-   * EXERCISE 6
+   * EXERCISE 5
    *
    * Extend the following quiz with an additional 3 questions, including a
    * tough bonus question; and if the user fails the bonus question, fallback

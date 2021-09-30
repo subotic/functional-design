@@ -1,4 +1,8 @@
 package net.degoes
+import net.degoes.email_filter2.EmailFilter.SubjectContains
+import net.degoes.email_filter2.EmailFilter.BodyContains
+import net.degoes.email_filter2.EmailFilter.SenderIn
+import net.degoes.email_filter2.EmailFilter.RecipientIn
 
 // Solution != Model of Solution
 
@@ -414,6 +418,32 @@ object email_filter2 {
   def matches(filter: EmailFilter, email: Email): Boolean =
     ???
 
+  import EmailFilter._
+  def executeToPredicate(filter: EmailFilter): Email => Boolean =
+  filter match {
+    case And(l, r)  =>
+      val left = executeToPredicate(l)
+      val right = executeToPredicate(r)
+      (email: Email) => left(email ) && right(email)
+    case Or(l, r) =>
+      val left = executeToPredicate(l)
+      val right = executeToPredicate(r)
+      (email: Email) => left(email ) || right(email)
+    case Negate(v) =>
+      val value = !executeToPredicate(v)
+      (email: Email) => value(email)
+    case SubjectContains(string) => 
+      (email: Email) => email.subject.contains(string)
+    case BodyContains(string) => 
+      (email: Email) => email.body.contains(string)
+    case SenderIn(senders) => 
+      (email: Email) => values.contains(email.sender)
+    case RecipientIn(recipients) => 
+      (email: Email) => email.to.exists(t => recipients.contains(t))
+  }
+
+
+
   /**
    * EXERCISE 9
    *
@@ -467,6 +497,10 @@ object spreadsheet2 {
   }
 
   sealed trait CalculatedValue { self =>
+    final case class Negate(self: CalculatedValue) extends CalculatedValue
+    final case class Sum(self: CalculatedValue, that: CalculatedValue) extends CalculatedValue
+    final case class Const(contents: Value) extends CalculatedValue
+    final case class At(col: Int, row: Int) extends CalculatedValue
 
     /**
      * EXERCISE 1
@@ -615,7 +649,19 @@ object ecommerce_marketing {
    * a match.
    */
   object executable_encoding {
-    type Pattern
+    trait Pattern {
+      def matches(history: List[Event], pattern: Pattern): Boolean
+
+      def +(that: Pattern): Pattern = ???
+
+      def atLeast(n: Int): Pattern = ???
+
+      def atMost(n: Int): Pattern = ???
+
+      def between(min: Int, max: Int): Pattern = ???
+
+      def repeat(min: Option[Int], max: Option[Int]): Pattern = ???
+    }
     object Pattern {
       val hasAnyAttribute: Pattern = ???
 
@@ -623,7 +669,10 @@ object ecommerce_marketing {
 
       def hasValue(attr: Attribute, value: Value): Pattern = ???
 
-      def partial(pf: PartialFunction[List[Event], (List[Event], Boolean)]): Pattern = ???
+      def partial(pf: PartialFunction[List[Event], (List[Event], Boolean)]): Pattern =
+        Pattern{
+
+        }
     }
   }
 }

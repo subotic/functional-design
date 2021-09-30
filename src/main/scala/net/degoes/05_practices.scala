@@ -53,30 +53,26 @@ object email_filter3 {
   sealed trait EmailFilter { self =>
     def &&(that: EmailFilter): EmailFilter = EmailFilter.And(self, that)
 
-    def ||(that: EmailFilter): EmailFilter = EmailFilter.InclusiveOr(self, that)
+    def ||(that: EmailFilter): EmailFilter =
+      !(!self && !that) // follows some kind of law allowing OR to define like that
 
-    def ^^(that: EmailFilter): EmailFilter = EmailFilter.ExclusiveOr(self, that)
+    def ^^(that: EmailFilter): EmailFilter =
+      (self || that) && !(self && that) // exclusive OR
+
+    def unary_! : EmailFilter = EmailFilter.Not(self)
   }
   object EmailFilter {
-    final case object Always                                            extends EmailFilter
-    final case object Never                                             extends EmailFilter
-    final case class And(left: EmailFilter, right: EmailFilter)         extends EmailFilter
-    final case class InclusiveOr(left: EmailFilter, right: EmailFilter) extends EmailFilter
-    final case class ExclusiveOr(left: EmailFilter, right: EmailFilter) extends EmailFilter
-    final case class SenderEquals(target: Address)                      extends EmailFilter
-    final case class SenderNotEquals(target: Address)                   extends EmailFilter
-    final case class RecipientEquals(target: Address)                   extends EmailFilter
-    final case class RecipientNotEquals(target: Address)                extends EmailFilter
-    final case class SenderIn(targets: Set[Address])                    extends EmailFilter
-    final case class RecipientIn(targets: Set[Address])                 extends EmailFilter
-    final case class BodyContains(phrase: String)                       extends EmailFilter
-    final case class BodyNotContains(phrase: String)                    extends EmailFilter
-    final case class SubjectContains(phrase: String)                    extends EmailFilter
-    final case class SubjectNotContains(phrase: String)                 extends EmailFilter
+    final case object Always                                    extends EmailFilter
+    final case class Not(value: EmailFilter)                    extends EmailFilter
+    final case class And(left: EmailFilter, right: EmailFilter) extends EmailFilter
+    final case class SenderEquals(target: Address)              extends EmailFilter
+    final case class RecipientEquals(target: Address)           extends EmailFilter
+    final case class BodyContains(phrase: String)               extends EmailFilter
+    final case class SubjectContains(phrase: String)            extends EmailFilter
 
-    val always: EmailFilter = Always
+    val acceptAll: EmailFilter = Always
 
-    val never: EmailFilter = Always
+    val rejectAll: EmailFilter = !acceptAll
 
     def senderIs(sender: Address): EmailFilter = SenderEquals(sender)
 
@@ -84,19 +80,22 @@ object email_filter3 {
 
     def recipientIs(recipient: Address): EmailFilter = RecipientEquals(recipient)
 
-    def recipientIsNot(recipient: Address): EmailFilter = RecipientNotEquals(recipient)
+    def recipientIsNot(recipient: Address): EmailFilter = !recipientIs(recipient)
 
-    def senderIn(senders: Set[Address]): EmailFilter = SenderIn(senders)
+    def senderIn(senders: Set[Address]): EmailFilter =
+      sender.foldLeft(rejectAll) {
+        case (acc, address) => acc || senderIs(address)
+      }
 
     def recipientIn(recipients: Set[Address]): EmailFilter = RecipientIn(recipients)
 
     def bodyContains(phrase: String): EmailFilter = BodyContains(phrase)
 
-    def bodyDoesNotContain(phrase: String): EmailFilter = BodyNotContains(phrase)
+    def bodyDoesNotContain(phrase: String): EmailFilter = !bodyContains(phrase)
 
     def subjectContains(phrase: String): EmailFilter = SubjectContains(phrase)
 
-    def subjectDoesNotContain(phrase: String): EmailFilter = SubjectNotContains(phrase)
+    def subjectDoesNotContain(phrase: String): EmailFilter = !subjectContains(phrase)
   }
 }
 
@@ -121,5 +120,92 @@ object ui_components {
     def goBackward(): Unit
 
     def draw(): Unit
+  }
+
+  object declarative {
+    sealed trait TurtleDrawing { self =>
+      def ++(that: TurtleDrawing): TurtleDrawing = TurtleDrawing.AndThen(self, that)
+
+      def turnLeft(degrees: Int): TurtleDrawing = self ++ TurtleDrawing.TurnLeft(degrees)
+
+      def turnRight(degrees: Int): TurtleDrawing = self ++ TurtleDrawing.TurnRight(degrees)
+
+      def goForward(): TurtleDrawing = self ++ TurtleDrawing.GoForward()
+
+      def goBackward(): TurtleDrawing = self ++ TurtleDrawing.GoBackward()
+
+      def draw(): TurtleDrawing = self ++ TurtleDrawing.Draw()
+    }
+    object TurtleDrawing {
+      final case class TurnLeft(degrees: Int)                               extends TurtleDrawing
+      final case class TurnRight(degrees: Int)                              extends TurtleDrawing
+      case object GoForward                                                 extends TurtleDrawing
+      case object GoBackward                                                extends TurtleDrawing
+      case object Draw                                                      extends TurtleDrawing
+      final case class AndThen(first: TurtleDrawing, second: TurtleDrawing) extends TurtleDrawing
+
+      def start: TurtleDrawing = turnLeft(0)
+
+      def turnLeft(degrees: Int): TurtleDrawing = TurnLeft(degrees)
+
+      def turnRight(degrees: Int): TurtleDrawing = TurnRight(360 - degrees)
+
+      def goForward(): TurtleDrawing = GoForward()
+
+      def goBackward(): TurtleDrawing = GoBackward()
+
+      def draw(): TurtleDrawing = Draw
+    }
+
+    val drawing =
+      start
+  }
+
+  object executable {
+    final case class TurtleDrawing(unsafeDraw: Turtle => Unit) {
+      def ++(that: TurtleDrawing): TurtleDrawing =
+        TurtleDrawing { turtle =>
+          self.draw(turtle)
+          that.draw(turtle)
+        }
+
+      def turnLeft(degrees: Int): TurtleDrawing =
+        TurtleDrawing { turtle =>
+          _.turnLeft(degrees)
+        }
+
+      def turnRight(degrees: Int): TurtleDrawing =
+        TurtleDrawing { turtle =>
+          _.turnRight(degrees)
+        }
+
+      def goForward(): TurtleDrawing =
+        TurtleDrawing { turtle =>
+          _.goForward()
+        }
+
+      def goBackward(): TurtleDrawing =
+        TurtleDrawing { turtle =>
+          _.goBackward()
+        }
+
+      def draw(): TurtleDrawing =
+        TurtleDrawing { turtle =>
+          _.draw
+        }
+    }
+    object TurtleDrawing {
+      def start: TurtleDrawing = TurtleDrawing(_ => ())
+
+      def turnLeft(degrees: Int): TurtleDrawing = start.turnLeft(degrees)
+
+      def turnRight(degrees: Int): TurtleDrawing = start.turnRight(degrees)
+
+      def goForward(): TurtleDrawing = start.goForward()
+
+      def goBackward(): TurtleDrawing = start.goBackward()
+
+      def draw(): TurtleDrawing = start.draw()
+    }
   }
 }
