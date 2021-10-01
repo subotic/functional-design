@@ -22,6 +22,9 @@ object binary_values {
      * Choose a type such that you can implement the `compose` function in
      * such a way that:
      *
+     * Associativity!!!
+     * (a + b) + c == > a + (b + c)
+     *
      * {{{
      * compose(compose(a, b), c) == compose(a, compose(b, c))
      * }}}
@@ -47,9 +50,9 @@ object binary_values {
      *
      * for all `a`, `b`, `c`.
      */
-    type SomeType
+    type SomeType = Quiz
 
-    def compose(left: SomeType, right: SomeType): SomeType = ???
+    def compose(left: SomeType, right: SomeType): SomeType = left + right
   }
 
   object Exercise3 {
@@ -60,15 +63,17 @@ object binary_values {
      * Choose a type such that you can implement the `compose`
      * function in such a way that:
      *
+     * Comutativity!!!
+     *
      * {{{
      * compose(a, b) == compose(b, a)
      * }}}
      *
      * for all `a`, `b`.
      */
-    type SomeType
+    type SomeType = Int
 
-    def compose(left: SomeType, right: SomeType): SomeType = ???
+    def compose(left: SomeType, right: SomeType): SomeType = left + right
   }
 
   object Exercise4 {
@@ -227,9 +232,11 @@ object binary_tcs {
      *
      * for all `a`, `b`, `c`, where `~` means "equivalent to".
      */
-    type SomeType[A]
+    import zio._
 
-    def compose[A, B](left: SomeType[A], right: SomeType[B]): SomeType[(A, B)] = ???
+    type SomeType[A] = Task[A]
+
+    def compose[A, B](left: SomeType[A], right: SomeType[B]): SomeType[(A, B)] = left.zip(right) // associative
   }
 
   object Exercise3 {
@@ -246,9 +253,10 @@ object binary_tcs {
      *
      * for all `a`, `b`, `c`, where `~` means "equivalent to".
      */
-    type SomeType[A]
+    type SomeType[A] = List[A]
 
-    def compose[A, B](left: SomeType[A], right: SomeType[B]): SomeType[Either[A, B]] = ???
+    def compose[A, B](left: SomeType[A], right: SomeType[B]): SomeType[Either[A, B]] =
+      lef.map(Left(_)) ++ right.map(Right(_))
   }
 
   object Exercise4 {

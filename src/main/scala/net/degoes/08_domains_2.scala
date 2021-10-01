@@ -570,6 +570,7 @@ object data_processing {
   }
   object Schema {
     case object Arbitrary                                               extends Schema
+    case object Impossible                                              extends Schena
     case object Null                                                    extends Schema
     case object Bool                                                    extends Schema
     case object Number                                                  extends Schema
@@ -635,8 +636,67 @@ object data_processing {
    * transformations (e.g. replacing nulls with values, replacing one type of
    * value with another type.
    */
-  sealed trait Transformation {}
-  object Transformation       {}
+  sealed trait Transformation { self =>
+    def ++(that: Transformation): Transformation = Transformation.AndThen(self, that)
+
+    def within(name: String): Transformation = Transformation.WithinField(name, self)
+
+  }
+  object Transformation {
+    case object Identity                                                          extends Transformation
+    final case class AndThen(first: Transformation, second: Transformation)       extends Transformation
+    final case class Constant(data: Data)                                         extends Transformation
+    final case class WithinField(name: String, transformation: Transformation)    extends Transformation
+    final case class DeleteField(name: String)                                    extends Transformation
+    final case class AddField(name: String, defaultValue: Transformation)         extends Transformation
+    final case class DeleteSchema(schema: Schema, defaultValue: Transformation)   extends Transformation
+    final case class AddSchema(schema: Schema)                                    extends Transformation
+    final case class WithinSchema(schema: Schema, transformation: Transformation) extends Transformation
+    final case class WithinElements(transformation: Transformation)               extends Transformation
+
+    val identity: Transformation = Identity
+
+    def const(data: Data): Transformation = Constant(data)
+
+    def deleteField(name: String): Transformation = DeleteField(name)
+
+    def addField(name: String, defaultValue: Transformation): Transformation = ???
+
+    // "{"userId":"sholmes"}
+    // "{"userId":"sholmes", "nested":"{"userId":"sholmes"}}
+    addField("nested", identity) ++ deleteField("user")
+
+    // {"userId": "sholmes"}
+    // {"nested": {"userId":"sholmes"}}
+    addField("nested", identity) ++ deleteField("user")
+    deleteField("postal_code").within("address")
+    addField("age", const(Data.Number(0)))
+
+    // {"address" {"postal_code: 123, "zip_code"}}
+    /*
+      CHANGE THE SCHEMA OF PRODUCTS
+
+      1. Delete a term (WHITHOUT default value)
+      2. Add a term ==> specify the schema and the default value, computed dynamically
+
+      CHANGE THE SCHEMA OF SUMS
+
+      1. Delete a term ==> specify a default value, compute dynamically
+      2. Add a term (WITHOUT default value)
+
+      CHANGE THE SCHEMA OF PRIMITIVES
+
+      Change the schema (default value computed dynamically)
+
+      CHANGE THE SCHEMA OF SEQUENCE
+
+      Change the schema of the elements
+   */
+  }
+
+  object executable {
+    final case class Transformation(transform: Data => Data)
+  }
 }
 
 object resources {
